@@ -1,37 +1,619 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Web Scraper</title>
-    <link rel="stylesheet" href="../static/styles.css">
-    </head>
-<body class="bg-gray-100">
-    <div class="container mx-auto p-4">
-        <h1 class="text-3xl font-bold text-center mb-6">Web Scraper</h1>
-        <div class="bg-white p-6 rounded-lg shadow-md max-w-md mx-auto">
-            {% if error %}
-                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                    {{ error }}
-                </div>
-            {% endif %}
-            <form method="POST" class="space-y-4">
-                <div>
-                    <label for="url" class="block text-sm font-medium text-gray-700">Website URL</label>
-                    <input type="url" name="url" id="url" placeholder="https://example.com" required
-                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                <div>
-                    <label for="max_links" class="block text-sm font-medium text-gray-700">Number of Links to Scrape</label>
-                    <input type="number" name="max_links" id="max_links" value="100" min="1" max="100000"
-                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                <button type="submit"
-                        class="w-full bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                    Scrape Links
-                </button>
-            </form>
-        </div>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LinkFlow - Smart Web Link Scraper</title>
+  <meta name="description" content="Ultra-fast, intelligent web link scraper and crawler powered by Python on Vercel Serverless. Extract, filter, analyze, and export links instantly.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="badge-pill">
+        <i class="fa-solid fa-bolt text-yellow-400"></i>
+        <span>Vercel Serverless Powered</span>
+      </div>
+      <h1 class="app-title">Web Link Scraper</h1>
+      <p class="app-subtitle">
+        Crawl, extract, categorize, and export links from any website in seconds.
+      </p>
+    </header>
+
+    <!-- Error Alert if any -->
+    <div id="errorAlert" class="alert-box alert-error" style="display: {% if error %}flex{% else %}none{% endif %};">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <span id="errorMessage">{{ error or '' }}</span>
     </div>
+
+    <!-- Scraper Form Box -->
+    <section class="glass-panel search-wrapper">
+      <form id="scraperForm" method="POST" action="/">
+        <div class="input-row">
+          <div class="url-input-container">
+            <i class="fa-solid fa-globe url-icon"></i>
+            <input
+              type="text"
+              id="urlInput"
+              name="url"
+              class="url-input"
+              placeholder="Enter target URL (e.g. quotes.toscrape.com or https://news.ycombinator.com)"
+              required
+              autocomplete="off"
+            />
+          </div>
+          <button type="submit" id="scrapeBtn" class="btn-primary">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <span>Extract Links</span>
+          </button>
+        </div>
+
+        <!-- Crawl Configurations -->
+        <div class="options-grid">
+          <div class="form-group">
+            <label class="form-label" for="maxLinks">Max Links</label>
+            <select id="maxLinks" name="max_links" class="select-input">
+              <option value="50">50 Links (Fast)</option>
+              <option value="100" selected>100 Links (Standard)</option>
+              <option value="250">250 Links (Deep)</option>
+              <option value="500">500 Links (Max)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="crawlMode">Crawl Mode</label>
+            <select id="crawlMode" name="mode" class="select-input">
+              <option value="crawl" selected>BFS Web Crawler (Follow links)</option>
+              <option value="single">Single Page Extraction (Direct links)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="toggle-label" for="sameDomain">
+              <input type="checkbox" id="sameDomain" name="same_domain" checked>
+              <span class="toggle-switch"></span>
+              <span class="form-label" style="margin: 0; text-transform: none;">Same Domain Only</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Quick Demo URLs -->
+        <div class="quick-samples">
+          <span><i class="fa-regular fa-lightbulb"></i> Try demo:</span>
+          <button type="button" class="sample-tag" onclick="setDemoUrl('https://quotes.toscrape.com')">quotes.toscrape.com</button>
+          <button type="button" class="sample-tag" onclick="setDemoUrl('https://news.ycombinator.com')">news.ycombinator.com</button>
+          <button type="button" class="sample-tag" onclick="setDemoUrl('https://books.toscrape.com')">books.toscrape.com</button>
+          <button type="button" class="sample-tag" onclick="setDemoUrl('https://example.com')">example.com</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="loading-container glass-panel">
+      <div class="pulse-radar">
+        <div></div>
+        <div></div>
+      </div>
+      <h3 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem;" id="loadingTitle">Scraping Website...</h3>
+      <p style="color: var(--text-muted); font-size: 0.95rem;" id="loadingSubtitle">Extracting and parsing links in real-time...</p>
+    </div>
+
+    <!-- Results Section -->
+    <main id="resultsSection" class="results-section">
+      <!-- Stats Overview Cards -->
+      <div class="stats-grid">
+        <div class="glass-card stat-card">
+          <div class="stat-header">
+            <span>Total Links</span>
+            <i class="fa-solid fa-link" style="color: var(--primary);"></i>
+          </div>
+          <div class="stat-value" id="statTotal">0</div>
+        </div>
+
+        <div class="glass-card stat-card">
+          <div class="stat-header">
+            <span>Internal</span>
+            <i class="fa-solid fa-arrow-turn-down" style="color: var(--accent-emerald);"></i>
+          </div>
+          <div class="stat-value" id="statInternal" style="color: var(--accent-emerald);">0</div>
+        </div>
+
+        <div class="glass-card stat-card">
+          <div class="stat-header">
+            <span>External</span>
+            <i class="fa-solid fa-arrow-up-right-from-square" style="color: #818cf8;"></i>
+          </div>
+          <div class="stat-value" id="statExternal" style="color: #818cf8;">0</div>
+        </div>
+
+        <div class="glass-card stat-card">
+          <div class="stat-header">
+            <span>Media / Assets</span>
+            <i class="fa-solid fa-file" style="color: var(--accent-amber);"></i>
+          </div>
+          <div class="stat-value" id="statMedia" style="color: var(--accent-amber);">0</div>
+        </div>
+
+        <div class="glass-card stat-card">
+          <div class="stat-header">
+            <span>Pages Crawled</span>
+            <i class="fa-solid fa-layer-group" style="color: var(--accent-cyan);"></i>
+          </div>
+          <div class="stat-value" id="statPages" style="color: var(--accent-cyan);">0</div>
+        </div>
+
+        <div class="glass-card stat-card">
+          <div class="stat-header">
+            <span>Time Elapsed</span>
+            <i class="fa-solid fa-stopwatch" style="color: var(--accent-purple);"></i>
+          </div>
+          <div class="stat-value" id="statTime" style="color: var(--accent-purple); font-size: 1.6rem;">0s</div>
+        </div>
+      </div>
+
+      <!-- Result Controls & Filter Bar -->
+      <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+        <div class="results-header">
+          <!-- Filter Tabs -->
+          <div class="filter-pills" id="filterPills">
+            <button type="button" class="filter-btn active" data-filter="all">All (<span id="countAll">0</span>)</button>
+            <button type="button" class="filter-btn" data-filter="internal">Internal (<span id="countInternal">0</span>)</button>
+            <button type="button" class="filter-btn" data-filter="external">External (<span id="countExternal">0</span>)</button>
+            <button type="button" class="filter-btn" data-filter="subdomain">Subdomain (<span id="countSubdomain">0</span>)</button>
+            <button type="button" class="filter-btn" data-filter="media">Media (<span id="countMedia">0</span>)</button>
+            <button type="button" class="filter-btn" data-filter="special">Special / Anchor (<span id="countSpecial">0</span>)</button>
+          </div>
+
+          <!-- Search & Export Actions -->
+          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+            <input
+              type="text"
+              id="tableSearch"
+              class="search-filter-input"
+              placeholder="Filter links or text..."
+            />
+            <div class="export-bar">
+              <button type="button" class="btn-export" onclick="exportLinks('txt')">
+                <i class="fa-regular fa-file-lines"></i> TXT
+              </button>
+              <button type="button" class="btn-export" onclick="exportLinks('csv')">
+                <i class="fa-solid fa-file-csv"></i> CSV
+              </button>
+              <button type="button" class="btn-export" onclick="exportLinks('json')">
+                <i class="fa-solid fa-code"></i> JSON
+              </button>
+              <button type="button" class="btn-export" onclick="copyAllUrls()">
+                <i class="fa-regular fa-copy"></i> Copy All
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Links Table -->
+        <div class="table-container">
+          <table class="links-table">
+            <thead>
+              <tr>
+                <th style="width: 50px;">#</th>
+                <th>Target URL</th>
+                <th style="width: 140px;">Type</th>
+                <th>Anchor / Text</th>
+                <th style="width: 90px; text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="linksTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+
+        <div id="emptyFilterState" style="display: none; text-align: center; padding: 2rem; color: var(--text-dim);">
+          <i class="fa-solid fa-filter-circle-xmark" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+          <p>No links match the current filter or search criteria.</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Recent Scrapes History -->
+    <section class="history-section" id="historySection" style="display: none;">
+      <div class="history-title">
+        <span><i class="fa-solid fa-clock-rotate-left"></i> Recent Crawls</span>
+        <button type="button" onclick="clearHistory()" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.8rem;">
+          Clear History
+        </button>
+      </div>
+      <div class="history-list" id="historyList">
+        <!-- Dynamically rendered -->
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>LinkFlow Scraper &copy; 2026. Built with Python Flask & Vercel Serverless.</p>
+    </footer>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Client-side Application Script -->
+  <script>
+    let currentData = null;
+    let activeFilter = 'all';
+    let searchQuery = '';
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadHistory();
+      
+      // Check if server passed initial data from form fallback
+      {% if initial_data %}
+        try {
+          const initial = {{ initial_data | tojson }};
+          if (initial && initial.success) {
+            renderResults(initial);
+          }
+        } catch(e) {
+          console.error("Initial data parse error:", e);
+        }
+      {% endif %}
+
+      // Setup filter buttons
+      document.querySelectorAll('#filterPills .filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#filterPills .filter-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          activeFilter = btn.getAttribute('data-filter');
+          filterAndRenderTable();
+        });
+      });
+
+      // Setup live table search
+      const searchInput = document.getElementById('tableSearch');
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          searchQuery = e.target.value.toLowerCase().trim();
+          filterAndRenderTable();
+        });
+      }
+
+      // Intercept form submit for smooth AJAX experience
+      const form = document.getElementById('scraperForm');
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await startScrape();
+        });
+      }
+    });
+
+    function setDemoUrl(url) {
+      const input = document.getElementById('urlInput');
+      if (input) {
+        input.value = url;
+        input.focus();
+      }
+    }
+
+    function showToast(message, icon = 'fa-check') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.innerHTML = `<i class="fa-solid ${icon}" style="color: var(--accent-emerald);"></i><span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 2500);
+    }
+
+    async function startScrape() {
+      const urlInput = document.getElementById('urlInput');
+      const maxLinksInput = document.getElementById('maxLinks');
+      const modeInput = document.getElementById('crawlMode');
+      const sameDomainInput = document.getElementById('sameDomain');
+      const errorAlert = document.getElementById('errorAlert');
+      const errorMessage = document.getElementById('errorMessage');
+      const loadingState = document.getElementById('loadingState');
+      const resultsSection = document.getElementById('resultsSection');
+      const scrapeBtn = document.getElementById('scrapeBtn');
+
+      let url = urlInput.value.trim();
+      if (!url) return;
+
+      // Hide results & errors, show loader
+      errorAlert.style.display = 'none';
+      resultsSection.style.display = 'none';
+      loadingState.style.display = 'flex';
+      scrapeBtn.disabled = true;
+
+      const payload = {
+        url: url,
+        max_links: parseInt(maxLinksInput.value, 10) || 100,
+        mode: modeInput.value || 'crawl',
+        same_domain_only: sameDomainInput.checked
+      };
+
+      try {
+        const response = await fetch('/api/scrape', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Failed to crawl website.');
+        }
+
+        renderResults(data);
+        saveToHistory(data);
+        showToast(`Successfully extracted ${data.stats.total} links!`);
+      } catch (err) {
+        errorMessage.textContent = err.message || 'An unexpected error occurred during scraping.';
+        errorAlert.style.display = 'flex';
+      } finally {
+        loadingState.style.display = 'none';
+        scrapeBtn.disabled = false;
+      }
+    }
+
+    function renderResults(data) {
+      currentData = data;
+      const resultsSection = document.getElementById('resultsSection');
+      
+      // Update Stats
+      document.getElementById('statTotal').textContent = data.stats.total || 0;
+      document.getElementById('statInternal').textContent = data.stats.internal || 0;
+      document.getElementById('statExternal').textContent = data.stats.external || 0;
+      document.getElementById('statMedia').textContent = data.stats.media || 0;
+      document.getElementById('statPages').textContent = data.stats.pages_crawled || 1;
+      document.getElementById('statTime').textContent = (data.stats.duration_seconds || 0) + 's';
+
+      // Update Filter Pill Counts
+      document.getElementById('countAll').textContent = data.stats.total || 0;
+      document.getElementById('countInternal').textContent = data.stats.internal || 0;
+      document.getElementById('countExternal').textContent = data.stats.external || 0;
+      document.getElementById('countSubdomain').textContent = data.stats.subdomain || 0;
+      document.getElementById('countMedia').textContent = data.stats.media || 0;
+      document.getElementById('countSpecial').textContent = (data.stats.special || 0) + (data.stats.anchor || 0);
+
+      // Reset filters & render
+      activeFilter = 'all';
+      searchQuery = '';
+      const searchInput = document.getElementById('tableSearch');
+      if (searchInput) searchInput.value = '';
+      document.querySelectorAll('#filterPills .filter-btn').forEach(b => b.classList.remove('active'));
+      const allBtn = document.querySelector('#filterPills .filter-btn[data-filter="all"]');
+      if (allBtn) allBtn.classList.add('active');
+
+      filterAndRenderTable();
+      resultsSection.style.display = 'block';
+      resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function filterAndRenderTable() {
+      if (!currentData || !currentData.links) return;
+
+      const tbody = document.getElementById('linksTableBody');
+      const emptyState = document.getElementById('emptyFilterState');
+      tbody.innerHTML = '';
+
+      let filtered = currentData.links.filter(link => {
+        // Filter by category
+        if (activeFilter === 'internal' && link.type !== 'internal') return false;
+        if (activeFilter === 'external' && link.type !== 'external') return false;
+        if (activeFilter === 'subdomain' && link.type !== 'subdomain') return false;
+        if (activeFilter === 'media' && link.type !== 'media') return false;
+        if (activeFilter === 'special' && link.type !== 'special' && link.type !== 'anchor') return false;
+
+        // Search query filter
+        if (searchQuery) {
+          const matchUrl = (link.url || '').toLowerCase().includes(searchQuery);
+          const matchText = (link.text || '').toLowerCase().includes(searchQuery);
+          const matchDomain = (link.domain || '').toLowerCase().includes(searchQuery);
+          if (!matchUrl && !matchText && !matchDomain) return false;
+        }
+
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        emptyState.style.display = 'block';
+      } else {
+        emptyState.style.display = 'none';
+        filtered.forEach((item, index) => {
+          const tr = document.createElement('tr');
+          const badgeClass = getBadgeClass(item.type);
+          
+          tr.innerHTML = `
+            <td style="color: var(--text-dim); font-size: 0.8rem;">${index + 1}</td>
+            <td class="link-cell">
+              <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="link-url" title="${escapeHtml(item.url)}">
+                ${escapeHtml(item.url)}
+              </a>
+            </td>
+            <td>
+              <span class="type-badge ${badgeClass}">${item.type || 'other'}</span>
+            </td>
+            <td class="link-text" title="${escapeHtml(item.text || '')}">
+              ${escapeHtml(item.text || '(No text)')}
+            </td>
+            <td>
+              <div class="action-btns" style="justify-content: flex-end;">
+                <button type="button" class="icon-btn" onclick="copyText('${escapeJs(item.url)}')" title="Copy URL">
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+                <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="icon-btn" title="Open Link">
+                  <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.75rem;"></i>
+                </a>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+    }
+
+    function getBadgeClass(type) {
+      switch (type) {
+        case 'internal': return 'badge-internal';
+        case 'external': return 'badge-external';
+        case 'subdomain': return 'badge-subdomain';
+        case 'media': return 'badge-media';
+        case 'special': return 'badge-special';
+        case 'anchor': return 'badge-anchor';
+        default: return 'badge-external';
+      }
+    }
+
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Link copied to clipboard!');
+      }).catch(() => {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showToast('Link copied to clipboard!');
+      });
+    }
+
+    function copyAllUrls() {
+      if (!currentData || !currentData.links || currentData.links.length === 0) return;
+      const allUrls = currentData.links.map(l => l.url).join('\n');
+      copyText(allUrls);
+      showToast(`Copied ${currentData.links.length} URLs to clipboard!`);
+    }
+
+    function exportLinks(format) {
+      if (!currentData || !currentData.links || currentData.links.length === 0) {
+        showToast('No links to export', 'fa-circle-exclamation');
+        return;
+      }
+
+      const domain = currentData.domain || 'links';
+      const timestamp = new Date().toISOString().slice(0, 10);
+      let filename = `${domain}_links_${timestamp}.${format}`;
+      let content = '';
+      let mimeType = 'text/plain';
+
+      if (format === 'csv') {
+        mimeType = 'text/csv;charset=utf-8;';
+        const headers = ['URL', 'Text', 'Type', 'Protocol', 'Domain', 'Source Page'];
+        const rows = currentData.links.map(l => [
+          `"${(l.url || '').replace(/"/g, '""')}"`,
+          `"${(l.text || '').replace(/"/g, '""')}"`,
+          `"${l.type || ''}"`,
+          `"${l.protocol || ''}"`,
+          `"${l.domain || ''}"`,
+          `"${(l.source_page || '').replace(/"/g, '""')}"`
+        ]);
+        content = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+      } else if (format === 'json') {
+        mimeType = 'application/json;charset=utf-8;';
+        content = JSON.stringify(currentData, null, 2);
+      } else { // txt
+        mimeType = 'text/plain;charset=utf-8;';
+        content = currentData.links.map(l => l.url).join('\n');
+      }
+
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast(`Exported as ${format.toUpperCase()}`);
+    }
+
+    // History in localStorage
+    function saveToHistory(data) {
+      try {
+        let history = JSON.parse(localStorage.getItem('scraper_history') || '[]');
+        history = history.filter(item => item.domain !== data.domain);
+        history.unshift({
+          domain: data.domain,
+          target_url: data.target_url,
+          total: data.stats.total,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+        if (history.length > 6) history = history.slice(0, 6);
+        localStorage.setItem('scraper_history', JSON.stringify(history));
+        loadHistory();
+      } catch (e) {
+        console.error("Storage error:", e);
+      }
+    }
+
+    function loadHistory() {
+      try {
+        const history = JSON.parse(localStorage.getItem('scraper_history') || '[]');
+        const container = document.getElementById('historyList');
+        const section = document.getElementById('historySection');
+        if (!container || !section) return;
+
+        if (history.length === 0) {
+          section.style.display = 'none';
+          return;
+        }
+
+        section.style.display = 'block';
+        container.innerHTML = '';
+        history.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'glass-card history-item';
+          div.onclick = () => {
+            setDemoUrl(item.target_url);
+            startScrape();
+          };
+          div.innerHTML = `
+            <div>
+              <div class="history-domain">${escapeHtml(item.domain)}</div>
+              <div class="history-meta">${item.total} links &bull; ${item.timestamp}</div>
+            </div>
+            <i class="fa-solid fa-arrow-right" style="color: var(--text-dim); font-size: 0.85rem;"></i>
+          `;
+          container.appendChild(div);
+        });
+      } catch (e) {}
+    }
+
+    function clearHistory() {
+      localStorage.removeItem('scraper_history');
+      loadHistory();
+      showToast('History cleared');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function escapeJs(str) {
+      if (!str) return '';
+      return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
+  </script>
 </body>
 </html>
