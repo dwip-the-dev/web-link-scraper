@@ -342,10 +342,16 @@ def handle_export():
 @app.route("/", methods=["GET", "POST"])
 @app.route("/<path:subpath>", methods=["GET", "POST"])
 def unified_handler(subpath=""):
-    path = (subpath or "").lower().strip("/")
+    original_path = (
+        request.headers.get("x-matched-path")
+        or request.headers.get("x-forwarded-uri")
+        or request.path
+        or subpath
+        or ""
+    ).lower()
     
     # 1. Health check
-    if path.endswith("health"):
+    if "health" in original_path or subpath == "health" or request.args.get("health") is not None:
         return jsonify({
             "status": "healthy",
             "service": "web-link-scraper",
@@ -354,14 +360,15 @@ def unified_handler(subpath=""):
         })
 
     # 2. Export endpoint
-    if path.endswith("export"):
+    if "export" in original_path or subpath == "export":
         return handle_export()
 
     # 3. Scrape API endpoint (JSON request or /scrape path)
     json_data = request.get_json(silent=True)
-    if json_data or path.endswith("scrape"):
+    if json_data or "scrape" in original_path:
         if request.method == "GET":
             return jsonify({"message": "Use POST with {'url': 'https://example.com'} to scrape links."})
+
 
         data = json_data or request.form.to_dict()
         url = (data.get("url") or "").strip()
