@@ -269,13 +269,35 @@ def scrape_engine(
 
 
 # ==========================================
+# WSGI Middleware for Vercel Rewrites
+# ==========================================
+class VercelPrefixMiddleware:
+    """Handles Vercel Serverless Function rewrites where PATH_INFO may include /api/index"""
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        path = environ.get("PATH_INFO", "")
+        if path.startswith("/api/index.py"):
+            environ["PATH_INFO"] = path[len("/api/index.py"):] or "/"
+        elif path.startswith("/api/index"):
+            environ["PATH_INFO"] = path[len("/api/index"):] or "/"
+        elif path == "/api":
+            environ["PATH_INFO"] = "/"
+        return self.wsgi_app(environ, start_response)
+
+app.wsgi_app = VercelPrefixMiddleware(app.wsgi_app)
+
+
+# ==========================================
 # Routes
 # ==========================================
 
 @app.route("/", methods=["GET", "POST"])
+@app.route("/api/index", methods=["GET", "POST"])
+@app.route("/api/index.py", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        # Handle standard HTML form submission as fallback
         url = request.form.get("url", "").strip()
         max_links = int(request.form.get("max_links", 100))
         mode = request.form.get("mode", "crawl")
@@ -299,6 +321,7 @@ def index():
 
 
 @app.route("/api/scrape", methods=["POST"])
+@app.route("/api/index/api/scrape", methods=["POST"])
 def api_scrape():
     data = request.get_json(silent=True) or request.form.to_dict()
     if not data:
@@ -330,6 +353,7 @@ def api_scrape():
 
 
 @app.route("/api/export", methods=["POST"])
+@app.route("/api/index/api/export", methods=["POST"])
 def export_links():
     """Server-side export fallback for CSV / TXT / JSON"""
     try:
@@ -378,16 +402,19 @@ def export_links():
 
 
 @app.route("/result")
+@app.route("/api/index/result")
 def result():
     return redirect(url_for("index"))
 
 
 @app.route("/download")
+@app.route("/api/index/download")
 def download():
     return redirect(url_for("index"))
 
 
 @app.route("/api/health", methods=["GET"])
+@app.route("/api/index/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "healthy", "service": "web-link-scraper", "version": "2.0.0"})
 
@@ -395,4 +422,5 @@ def health():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
