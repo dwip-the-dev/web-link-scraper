@@ -290,72 +290,10 @@ app.wsgi_app = VercelPrefixMiddleware(app.wsgi_app)
 
 
 # ==========================================
-# Routes
+# Routes & Unified Handler
 # ==========================================
 
-@app.route("/", methods=["GET", "POST"])
-@app.route("/api/index", methods=["GET", "POST"])
-@app.route("/api/index.py", methods=["GET", "POST"])
-def index():
-    if request.method == "POST":
-        url = request.form.get("url", "").strip()
-        max_links = int(request.form.get("max_links", 100))
-        mode = request.form.get("mode", "crawl")
-        same_domain = request.form.get("same_domain") == "on" or request.form.get("same_domain") == "true"
-        
-        if not url:
-            return render_template("index.html", error="Please enter a valid website URL.")
-            
-        try:
-            results = scrape_engine(
-                start_url=url,
-                max_links=min(max_links, 500),
-                mode=mode,
-                same_domain_only=same_domain,
-            )
-            return render_template("index.html", initial_data=results)
-        except Exception as e:
-            return render_template("index.html", error=f"Scraping error: {str(e)}")
-
-    return render_template("index.html")
-
-
-@app.route("/api/scrape", methods=["POST"])
-@app.route("/api/index/api/scrape", methods=["POST"])
-def api_scrape():
-    data = request.get_json(silent=True) or request.form.to_dict()
-    if not data:
-        return jsonify({"success": False, "error": "No JSON payload provided."}), 400
-
-    url = data.get("url", "").strip()
-    if not url:
-        return jsonify({"success": False, "error": "URL parameter is required."}), 400
-
-    try:
-        max_links = min(int(data.get("max_links", 100)), 1000)
-    except (ValueError, TypeError):
-        max_links = 100
-
-    mode = data.get("mode", "crawl")
-    same_domain_only = str(data.get("same_domain_only", "true")).lower() in ("true", "1", "yes", "on")
-
-    try:
-        result = scrape_engine(
-            start_url=url,
-            max_links=max_links,
-            mode=mode,
-            same_domain_only=same_domain_only,
-            timeout_seconds=8.5,  # Keep well below serverless limit
-        )
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route("/api/export", methods=["POST"])
-@app.route("/api/index/api/export", methods=["POST"])
-def export_links():
-    """Server-side export fallback for CSV / TXT / JSON"""
+def handle_export():
     try:
         data = request.get_json(silent=True) or {}
         links = data.get("links", [])
@@ -401,22 +339,79 @@ def export_links():
         return jsonify({"error": str(e)}), 400
 
 
-@app.route("/result")
-@app.route("/api/index/result")
-def result():
-    return redirect(url_for("index"))
+@app.route("/", methods=["GET", "POST"])
+@app.route("/<path:subpath>", methods=["GET", "POST"])
+def unified_handler(subpath=""):
+    path = (subpath or "").lower().strip("/")
+    
+    # 1. Health check
+    if path.endswith("health"):
+        return jsonify({
+            "status": "healthy",
+            "service": "web-link-scraper",
+            "runtime": "vercel-python",
+            "version": "2.0.0"
+        })
 
+    # 2. Export endpoint
+    if path.endswith("export"):
+        return handle_export()
 
-@app.route("/download")
-@app.route("/api/index/download")
-def download():
-    return redirect(url_for("index"))
+    # 3. Scrape API endpoint (JSON request or /scrape path)
+    json_data = request.get_json(silent=True)
+    if json_data or path.endswith("scrape"):
+        if request.method == "GET":
+            return jsonify({"message": "Use POST with {'url': 'https://example.com'} to scrape links."})
 
+        data = json_data or request.form.to_dict()
+        url = (data.get("url") or "").strip()
+        if not url:
+            return jsonify({"success": False, "error": "URL parameter is required."}), 400
 
-@app.route("/api/health", methods=["GET"])
-@app.route("/api/index/api/health", methods=["GET"])
-def health():
-    return jsonify({"status": "healthy", "service": "web-link-scraper", "version": "2.0.0"})
+        try:
+            max_links = min(int(data.get("max_links", 100)), 1000)
+        except (ValueError, TypeError):
+            max_links = 100
+
+        mode = data.get("mode", "crawl")
+        same_domain_only = str(data.get("same_domain_only", "true")).lower() in ("true", "1", "yes", "on")
+
+        try:
+            result = scrape_engine(
+                start_url=url,
+                max_links=max_links,
+                mode=mode,
+                same_domain_only=same_domain_only,
+                timeout_seconds=8.5,
+            )
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    # 4. Standard HTML Form POST (Fallback for no-JS)
+    if request.method == "POST":
+        url = request.form.get("url", "").strip()
+        max_links = int(request.form.get("max_links", 100))
+        mode = request.form.get("mode", "crawl")
+        same_domain = request.form.get("same_domain") in ("on", "true")
+
+        if not url:
+            return render_template("index.html", error="Please enter a valid website URL.")
+
+        try:
+            results = scrape_engine(
+                start_url=url,
+                max_links=min(max_links, 500),
+                mode=mode,
+                same_domain_only=same_domain,
+            )
+            return render_template("index.html", initial_data=results)
+        except Exception as e:
+            return render_template("index.html", error=f"Scraping error: {str(e)}")
+
+    # 5. Default: Render UI
+    return render_template("index.html")
+
 
 
 if __name__ == "__main__":

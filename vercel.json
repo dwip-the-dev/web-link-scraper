@@ -2,22 +2,6 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/api/scrape",
-      "destination": "/api/scrape"
-    },
-    {
-      "source": "/api/health",
-      "destination": "/api/health"
-    },
-    {
-      "source": "/api/export",
-      "destination": "/api/export"
-    },
-    {
-      "source": "/static/(.*)",
-      "destination": "/api/index"
-    },
-    {
       "source": "/(.*)",
       "destination": "/api/index"
     }
